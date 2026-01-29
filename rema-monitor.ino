@@ -181,7 +181,8 @@ void setup() {
   //   net.setInsecure();
   // #endif
   
-  // BearSSL no está disponible para ESP32, se usa setInsecure()s
+  // TODO: ESP32 con Arduino usa WiFiClientSecure (basado en mbedTLS), no BearSSL como el NodeMCU/ESP8266
+  // Por el momento, se usa setInsecure()
   net.setInsecure();
 
   // Configurar MQTT
