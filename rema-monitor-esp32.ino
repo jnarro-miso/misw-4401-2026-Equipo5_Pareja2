@@ -6,6 +6,8 @@
 
 #define DHTTYPE DHT11
 #define dht_dpin 25  // GPIO25 de la placa ESP32
+#define PHOTO_PIN 34  // GPIO34 para ESP32
+
 DHT dht(dht_dpin, DHTTYPE);
 
 #include "secrets.h"
@@ -35,6 +37,7 @@ const char MQTT_SUB_TOPIC[] = HOSTNAME "/";
 // Reemplazar "ciudad" por tu ciudad (minúsculas, sin espacios, sin acentos)
 const char MQTT_PUB_TOPIC1[] = "humedad/lima/" HOSTNAME;
 const char MQTT_PUB_TOPIC2[] = "temperatura/lima/" HOSTNAME;
+const char MQTT_PUB_TOPIC3[] = "luminosidad/lima/" HOSTNAME;
 
 // ============================================
 // CONFIGURACIÓN SSL/TLS
@@ -48,6 +51,17 @@ PubSubClient client(net);
 
 time_t now;
 unsigned long lastMillis = 0;
+
+int photoRaw = 0;
+float luminosity = 0;
+
+// ============================================
+// FUNCIÓN: Leer Photoresistor
+// ============================================
+void readPhotoresistor() {
+  photoRaw = analogRead(PHOTO_PIN);
+  luminosity = map(photoRaw, 4095, 0, 0, 100);
+}
 
 // ============================================
 // FUNCIÓN: Conectar a MQTT
@@ -114,6 +128,10 @@ void setup() {
   // Inicializar DHT11
   dht.begin();
   Serial.println("✓ DHT11 inicializado");
+
+  // Inicializar Photoresistor
+  pinMode(PHOTO_PIN, INPUT);
+  Serial.println("✓ Photoresistor inicializado");
 
   // Conectar a WiFi
   Serial.print("Conectando a WiFi: ");
@@ -242,9 +260,18 @@ void loop() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
 
+  // Leer Photoresistor
+  readPhotoresistor();
+
   // Validar lecturas
   if (isnan(h) || isnan(t)) {
     Serial.println("⚠️ Error leyendo DHT11");
+    delay(5000);
+    return;
+  }
+
+  if (isnan(luminosity)) {
+    Serial.println("⚠️ Error leyendo Photoresistor");
     delay(5000);
     return;
   }
@@ -259,9 +286,15 @@ void loop() {
   char payload2[json2.length() + 1];
   json2.toCharArray(payload2, json2.length() + 1);
 
+  // Crear JSON para luminosidad
+  String json3 = "{\"value\": " + String(luminosity, 1) + "}";
+  char payload3[json3.length() + 1];
+  json3.toCharArray(payload3, json3.length() + 1);
+
   // Publicar en MQTT
   bool success1 = client.publish(MQTT_PUB_TOPIC1, payload1, false);
   bool success2 = client.publish(MQTT_PUB_TOPIC2, payload2, false);
+  bool success3 = client.publish(MQTT_PUB_TOPIC3, payload3, false);
 
   // Mostrar en Monitor Serie
   Serial.print(success1 ? "✓ " : "✗ ");
@@ -273,6 +306,11 @@ void loop() {
   Serial.print(MQTT_PUB_TOPIC2);
   Serial.print(" → ");
   Serial.println(payload2);
+
+  Serial.print(success3 ? "✓ " : "✗ ");
+  Serial.print(MQTT_PUB_TOPIC3);
+  Serial.print(" → ");
+  Serial.println(payload3);
 
   Serial.println("---");
 
